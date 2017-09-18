@@ -1,4 +1,4 @@
-# Create Gaussian Filter                                                         # Notes
+# Create Gaussian Filter
 
 using PyPlot
 
@@ -15,50 +15,48 @@ chan = 4
 
 getvol(tstep::Int) = m[:, :, chan, 1:nslices, tstep]
 
-function getgausskern(pts, i, sig)                 # pts = scales # of points in interval, int = size interval, sig = scale parm
+function getgausskern(pts, i, sig)                   # pts = scales # of points in interval, int = size interval, sig = scale parm
 
     assert(pts > 0)
     assert(i > 0)
     assert(sig > 0)
     
     t = sig^2
-    x = linspace(-i, i, (i*2+1)*pts)                                             # t*2+1 is number of integer points in interval (+1 at end accts for 0)
-    y = (e.^(-(x.^2)./(2*t)))./(t*sqrt(2*pi))                                            # Gaussian function centered at x=0
+    x = linspace(-i, i, (i*2+1)*pts)                 # t*2+1 is number of integer points in interval (+1 at end accts for 0)
+    y = (e.^(-(x.^2)./(2*t)))./(t*sqrt(2*pi))        # Gaussian function centered at x=0
 end
 
 function gaussfilt3{T}(x::Array{T, 3}, pts, i, sig)
     k = getgausskern(pts, i, sig)
 
     M, N, D = size(x)
-    assert(M > (i*2+1)*pts)
-    assert(N > (i*2+1)*pts)
-    assert(D > (i*2+1)*pts)
 
     X = fft(x, 1)
 
-    kpad = zeros(Complex128, M)
-    kpad[1:Int(ceil(length(k)/2))] = k[Int(ceil(length(k)/2)):Int(length(k))]
-    kpad[Int(M-floor(length(k)/2)+1):M] = kpad[1:Int(floor(length(k)/2))]
-    fft!(kpad)
-    for n = 1:N, d = 1:D X[:, n, d].*= kpad end
+    kpad1 = zeros(Complex128, (M, 1, 1))
+    kpad2 = zeros(Complex128, (1, N, 1))
+    kpad3 = zeros(Complex128, (1, 1, D))
+    
+    kpad1[1:Int(ceil(length(k)/2))] = k[Int(ceil(length(k)/2)):Int(length(k))]
+    kpad1[Int(M-floor(length(k)/2)+1):M] = kpad1[1:Int(floor(length(k)/2))]
+    fft!(kpad1)
+    for n = 1:N, d = 1:D X[:, n, d].*= kpad1 end
 
     ifft!(X, 1)
     fft!(X, 2)
 
-    kpad = zeros(Complex128, N)
-    kpad[1:Int(ceil(length(k)/2))] = k[Int(ceil(length(k)/2)):Int(length(k))]
-    kpad[Int(N-floor(length(k)/2)+1):N] = kpad[1:Int(floor(length(k)/2))]
-    fft!(kpad)
-    for m = 1:M, d = 1:D X[m, :, d] .*= kpad end
+    kpad2[1:Int(ceil(length(k)/2))] = k[Int(ceil(length(k)/2)):Int(length(k))]
+    kpad2[Int(N-floor(length(k)/2)+1):N] = kpad2[1:Int(floor(length(k)/2))]
+    fft!(kpad2)
+    for m = 1:M, d = 1:D X[m, :, d].*= kpad2 end
 
     ifft!(X, 2)
     fft!(X, 3)
 
-    kpad = zeros(Complex128, D)
-    kpad[1:Int(ceil(length(k)/2))] = k[Int(ceil(length(k)/2)):Int(length(k))]
-    kpad[Int(D-floor(length(k)/2)+1):D] = kpad[1:Int(floor(length(k)/2))]
-    fft!(kpad)
-    for m = 1:M, n = 1:N X[m, n, :] .*= kpad end
+    kpad3[1:Int(ceil(length(k)/2))] = k[Int(ceil(length(k)/2)):Int(length(k))]
+    kpad3[Int(D-floor(length(k)/2)+1):D] = kpad3[1:Int(floor(length(k)/2))]
+    fft!(kpad3)
+    for m = 1:M, n = 1:N X[m, n, :].*= kpad3 end
 
     real(ifft(X, 3))
 end
@@ -106,7 +104,7 @@ function arglocalmax{T}(x::Array{T, 3}, r=1, thresh=0)
     maxs
 end
 
-function getlocalmaxs{T}(pyr::Array{Array{T, 3}}, levels, thresh=0)
+function getlocalmaxs{T}(pyr::Array{Array{T, 3},1}, level::Int64, thresh=0)
     maxs = []
     for l = levels
         for ((i, j, k), value) = arglocalmax(pyr[l], 1, thresh)
@@ -120,25 +118,29 @@ end
 
 function makelappyr{T}(vol::Array{T, 3}, pts, i, sig, ord::Int=1)
     L = Int(ceil(log2(minimum(size(vol)))) + 1)
-    pyr = (vol)
+    pyr = Array[vol]
     for l = 2:L
-        if any(m -> m <= ord, size(pyr[l - 1]))
-            break
-        end
-        push!(pyr, decvol(gaussfilt3(pyr[l - 1], pts, i, sig)))
-        up = interpgauss(pyr[l], pts, i, sig)
-        pyr[l - 1] -= up[map(m -> 1:m, size(pyr[l - 1]))...]
+        print(size(pyr))
+	M, N, D = size(pyr[l - 1])
+        if M > (i*2*pts) && N > (i*2*pts) && D > (i*2*pts)
+            push!(pyr, decvol(gaussfilt3(pyr[l - 1], pts, i, sig)))
+            up = interpgauss(pyr[l], pts, i, sig)
+            pyr[l - 1] -= up[map(m -> 1:m, size(pyr[l - 1]))...]
+	else
+	    break
+	end
     end
     pyr
 end
 
 #---------------------------------------------------------------------------
-vol_1 = getvol(Int(tsteps))
+
+vol_1 = getvol(Int(1))
 
 vol_1 = squeeze(vol_1, 3)
 
-pyr_1 = makelappyr(vol_1, 15, 6, 1);
+pyr_1 = makelappyr(vol_1, 1, 6, 1);
 
-levels_1 = size(pyr)[1];
+levels_1 = size(pyr_1)[1];
 
-loc_max = arglocalmax(pyr_1, level_1)
+loc_max = getlocalmaxs(pyr_1, levels_1)
