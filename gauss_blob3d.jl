@@ -120,8 +120,7 @@ function makelappyr{T}(vol::Array{T, 3}, pts, i, sig, ord::Int=1)
     L = Int(ceil(log2(minimum(size(vol)))) + 1)
     pyr = Array[vol]
     for l = 2:L
-        print(size(pyr))
-	M, N, D = size(pyr[l - 1])
+    M, N, D = size(pyr[l - 1])
         if M > (i*2*pts) && N > (i*2*pts) && D > (i*2*pts)
             push!(pyr, decvol(gaussfilt3(pyr[l - 1], pts, i, sig)))
             up = interpgauss(pyr[l], pts, i, sig)
