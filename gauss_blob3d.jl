@@ -1,10 +1,12 @@
 # GAUSSIAN FILTER FOR LAPLACIAN PYRAMID. BLOB DETECTOR
 
 # TODO:
-# (1)  GO BACK AND COMMENT SO IT'S EASY FOR OTHERS TO READ
+# (1)  USE BLOB DETECTION TO PLOT 3D SPHERES AROUND DETECTED BLOBS
 # (2)  MAKE IT SO THAT YOU CAN RECOVER BLOB SIZES NOT OF THE FORM IN SAM'S EMAIL (SEE EMIAL) 
+# (3)  GO BACK AND COMMENT SO IT'S EASY FOR OTHERS TO READ
 
 
+using ImageView
 using ImageView
 using PyPlot
 using PyCall
@@ -248,13 +250,12 @@ function blob_trimmer(x::Array{Any,1},  threshold = 0.2)
 
     # Determines the amount of overlap between two blobs. If the overlap ratio is too big, the blob that has the lower local max value is deleted. 
 
-#   print(size(combinations(x, length(x))))
     allblobcombs = combinations(x,2)
-    print(typeof(allblobcombs))
     for comb in allblobcombs
         coord1 = [comb[1][1], comb[1][2], comb[1][3]]
 	coord2 = [comb[2][1], comb[2][2], comb[2][3]]
-        if blob_overlap(coord1, comb[1][6], coord2, comb[2][6]) > threshold
+	over = blob_overlap(coord1, comb[1][6], coord2, comb[2][6])
+        if over > threshold
 	    if comb[1][4] > comb[2][4]
 	        x = filter(y -> y != comb[2], x)
             else
@@ -271,16 +272,43 @@ end
 blobs_trimmed = blob_trimmer(loc_max_new)
 
 
-# PLOT BLOBS ON RANDOM IMAGE
+#3D VOLUME PLOT
 
-img = vol_1[:,:,1]
+@pyimport mayavi.mlab as mlab
 
-fig, ax = subplots(1)
-imshow(img)
-ax = gca()
-for blob in blobs_trimmed
-    c = circle((blob[2], blob[1]), 2, edgecolor = "black", facecolor = "none")
-    c[:radius] = sqrt(2)*blob[6]
-    ax[:add_patch](c)
+cont3d = mlab.contour3d(vol_1) # <-- If you only what to see the blobs
+mlab.axes(cont3d) 
+
+blob_matrix = Matrix(0,4)
+for i = 1:length(blobs_trimmed)
+    blob_info = [blobs_trimmed[i][1], blobs_trimmed[i][2], blobs_trimmed[i][3], blobs_trimmed[i][6]]'
+    blob_matrix = cat(1, blob_matrix, blob_info)
 end
-show()
+
+#pts = mlab.points3d(blob_matrix[:,1], blob_matrix[:,2], blob_matrix[:,3], blob_matrix[:,4]*sqrt(2), scale_mode = "none",  color= (0,0,0))
+
+#mlab.pipeline[:volume](mlab.pipeline[:scalar_field](vol_1))
+mlab.show()
+
+
+#------------2D plots, using imshow, with detected blobs circled--------------
+
+#img = vol_1[:,:,47]
+
+#fig = figure()
+#ax = gca(projection = "3d")
+#view(vol_1)
+
+#fig, ax = subplots(1)
+#imshow(img)
+#ax = gca()
+#blob_coors = []
+#for blob in blobs_trimmed
+#    coorstup = (blob[1], blob[2], blob[3])
+#    push!(blob_coors,coorstup)
+#    c = circle((blob[2], blob[1]), 2, edgecolor = "black", facecolor = "none")
+#    c[:radius] = sqrt(2)*blob[6]
+#    ax[:add_patch](c)
+#end
+#show()
+#print(blob_coors)
