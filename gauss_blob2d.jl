@@ -134,6 +134,11 @@ end
 
 
 function postprocpyr(pyr::Array{Any, 1})
+
+    # Normalizes the values of each pixel.
+    
+    # Don't use this until after trimming!!! Normalizing makes a lot of the levels have the same value. As a result, some of the blobs don't get trimmed. If you look at the blob_trimmer code, you'll understand why this is important.
+    
     numlevels = length(pyr)
     for i = 1:numlevels
         img = pyr[i]
@@ -146,27 +151,27 @@ function postprocpyr(pyr::Array{Any, 1})
 end
 
 #------------------Test-------------------------------------------
-pts_1 = 5
+ord_1 = 40
 
-i_1 = 6
+pyr_1 = makelappyr(img, ord_1)
 
-sig_1 = 5
+#pyr_1 = postprocpyr(pyr_1)
 
-pyr_1 = makelappyr(img)
-
-#pyr_1 = makelappyr(img, pts_1, i_1, sig_1)
-
-pyr_1 = postprocpyr(pyr_1)
+println(length(pyr_1))
 
 levels_1 = size(pyr_1)[1]
 
-threshes_1 = [0.25, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2]
+threshes_1 = [0.09, 0.04, 0.03, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
 
 loc_maxs_1 = getlocalmaxs(pyr_1, levels_1, threshes_1)
+
+print(size(loc_maxs_1))
 
 #-----------------------Display Image Pyramid-----------------------
 
 function getrowpad(pyr::Array{Any, 1}, level::Int64)
+
+# Gets the row padding for each image of the pyramid.
 
     assert(level>1)
 
@@ -188,6 +193,8 @@ end
 
 
 function imgpyrdisplay(pyr::Array{Any, 1})
+
+    # Displays the image pyramid, having the upperlevels of the pyramid stacked beside the base of the pyramid.
 
     display = zeros(size(pyr[1])[1], size(pyr[1])[2]+size(pyr[2])[2])
     for level = 1:length(pyr)
@@ -212,7 +219,7 @@ end
 
 #---------------------------------------------------------------
 
-#imgpyrdisplay(pyr_1)
+imgpyrdisplay(pyr_1)
 
 
 #------------Blob Detection and Trimming------------------------
@@ -220,6 +227,9 @@ end
 function blob_upscale(loc_max::Array{Any, 1}, ord::Int=1)
 
 #   Scales the coordinates to the base level based on their level in the pyramid. Also scales blob size.
+
+    #NOTE: loc_max[i] corresponds to information for the ith blob.
+    #NOTE : loc_max[i][1] is x coordinate for blob i, loc_max[i][2] is y coordinate for blob i, loc_max[i][3] is pixel value for blob i, loc_max[i][4] is level for blob i, and loc_max[i][5] is sigma value for blob i.
 
     sig_sq = (ord * (1/4))+(1/4) 
     sig = sqrt(sig_sq)    # blob size for base of the pyramid
@@ -237,7 +247,7 @@ end
 
 #--------------------------------------------------------------
 
-loc_max_new = blob_upscale(loc_maxs_1)
+loc_max_new = blob_upscale(loc_maxs_1, ord_1)
 #print(loc_max_new, ",")
 
 #--------------------------------------------------------
@@ -254,25 +264,25 @@ function blob_overlap{T}(blob1::Array{T, 1}, blob2::Array{T, 1}, sig1::Float64, 
 
     r1 = sig1*sqrt(2)
     r2 = sig2*sqrt(2)
-    
-    d = sqrt((x1-x2)^2 + (y1-y2)^2)
 
-    if d > r1 + r2
+    dist = sqrt((x1-x2)^2+(y1-y2)^2)
+
+    if dist > r1 + r2
         return 0
     end
 
-    if d <= abs(r1 - r2)
-	return 1
+    if dist <= abs(r1 - r2)
+    	return 1
     end
 
-    ratio1 = ((d^2) + (r1^2) - (r2^2))/(2 * d * r1)
-    ratio2 = ((d^2) + (r2^2) - (r1^2))/(2 * d * r2)
-    a = -d + r1 + r2
-    b = d + r1 - r2
-    c = d - r1 + r2
-    d = d + r1 + r2
+    ratio1 = ((dist^2) + (r1^2) - (r2^2))/(2 * dist * r1)
+    ratio2 = ((dist^2) + (r2^2) - (r1^2))/(2 * dist * r2)
+    a = -dist + r1 + r2
+    b = dist + r1 - r2
+    c = dist - r1 + r2
+    d = dist + r1 + r2
 
-    intersect_area = (r1^2) * acos(ratio1) + (r2^2) * acos(ratio2) - (1/2) * sqrt(a*b*c*d)
+    intersect_area = (r1^2) * acos(ratio1) + (r2^2) * acos(ratio2) - (1/2) * sqrt(abs(a*b*c*d))
 
     radii = [r1, r2]
     radius = minimum(radii)
@@ -283,18 +293,18 @@ end
 
 function blob_trimmer(x::Array{Any, 1}, threshold = 0.2)
 
-    # Determines the amount of overlap between two blobs. Kills blobs that overlap too much.
+    # Goes through list of blobs to see which overlap. If 2 blobs overlap each other, and the overlap is large enough, the blob with lower pixel intensity is killed.
 
-    println("oldsize: ", size(x))
-    allblobcombs = combinations(x,2)
-    allblobocmbs = collect(allblobcombs)
-    b = 0
+    #NOTE: x[i] corresponds to information for the ith blob.
+    #NOTE : x[i][1] is x coordinate for blob i, x[i][2] is y coordinate for blob i, x[i][3] is pixel value for blob i, x[i][4] is level for blob i, and x[i][5] is sigma value for blob i.
+
+    println("size of blobs list before trimming: ", size(x))
+    allblobcombs = collect(combinations(x,2))
     for comb in allblobcombs
     
         coord1 = [comb[1][1], comb[1][2]]
-	coord2 = [comb[2][1], comb[2][1]]
+	coord2 = [comb[2][1], comb[2][2]]
 	over = blob_overlap(coord1, coord2, comb[1][5], comb[2][5])
-	
 	if over > threshold
 	            
             if comb[1][3] > comb[2][3]
@@ -302,55 +312,50 @@ function blob_trimmer(x::Array{Any, 1}, threshold = 0.2)
             else
 	        x = filter(y -> y != comb[1], x)
             end
-	    println("filtering x: ", size(x))
 	end
-	
     end
-    println("newsize: ", size(x))
+    println("size of blobs list after trimming: ", size(x))
     x
 end
 
 #-----------------------------------------------------------------
 
 blobs_trimmed = blob_trimmer(loc_max_new)
-print(size(loc_max_new))
-#print(blobs_trimmed)
+println(blobs_trimmed)
 
 #--------------------------Plot Blobs-------------------------------
-println("blobtrimmed size: ", size(blobs_trimmed))
 fig, ax = subplots(1)
 imshow(img)
 ax = gca()
-blob_coors = []
-for blob in blobs_trimmed
-    coorstup = (blob[1], blob[2])
-    push!(blob_coors,coorstup)
-    c = circle((blob[2], blob[1]), 2, edgecolor = "black", facecolor = "none")
-    c[:radius] = blob[5]*sqrt(2)
+for i = 1:length(blobs_trimmed)
+    c = circle((blobs_trimmed[i][2], blobs_trimmed[i][1]), 2, edgecolor = "black", facecolor = "none")
+    c[:radius] = blobs_trimmed[i][5]*sqrt(2)
     ax[:add_patch](c)
 end
 show()
 
 #-----------------------Continous Scale Parameter-------------------
 
-function upsample(pyr::Array{Any, 1}, l::Int64, numupsamples::Int64, pts, i, sig)
+function upsample(pyr::Array{Any, 1}, l::Int64, numupsamples::Int64, ord)
 
     # upsamples an image (level of the pyramid) a specific number of times.
 
     currentimg = pyr[l]
     for k = 1:numupsamples
-        currentimg = interpgauss(currentimg, pts, i, sig)
+        currentimg = interpbinom(currentimg, ord)
     end
     currentimg
 end
 
 
-function get_locvals_upperlevels(pyr::Array{Any, 1}, numlevels::Int64, locmaxinfo::Tuple{Int64, Int64, Float64, Int64, Int64}, pts, i, sig)
+function get_locvals_upperlevels(pyr::Array{Any, 1}, numlevels::Int64, locmaxinfo::Tuple{Int64, Int64, Float64, Int64, Float64}, ord)
 
     # Takes in a local max for a specific level and finds the corresponding values for this local max at levels above it. Then it returns the values for levels above it, along with their corresponding sigma values.
 
+    #NOTE: locmaxinfo[1] is x coordinate, locmaxinfo[2] is y coordinate, locmaxinfo[3] is pixel value, locmaxinfo[4] is level, and locmaxinfo[5] is sigma size.
+
     l = locmaxinfo[4]
-    numupperlevels = numlevels - 1
+    numupperlevels = numlevels - l
     upperlevelmaxs = []
     img = pyr[l]
     currentsig = locmaxinfo[5]
@@ -358,19 +363,21 @@ function get_locvals_upperlevels(pyr::Array{Any, 1}, numlevels::Int64, locmaxinf
 
     for k = 1:numupperlevels
         scale = k
-	upsampledimg = upsample(pyr, locmaxinfo[4] + k, k, pts, i, sig)
+	upsampledimg = upsample(pyr, locmaxinfo[4] + k, k, ord)
 	vallocmax = upsampledimg[Int(coors[1]), Int(coors[2])]
 	newsig = currentsig*(2^scale)
-	sig_tip = (newsig, vallocmax)
+	sig_tup = (newsig, vallocmax)
 	push!(upperlevelmaxs, sig_tup)
     end
     upperlevelmaxs
 end
 
 
-function get_locvals_lowerlevels(pyr::Array{Any, 1}, numlevel::Int64, locmaxinfo::Tuple{Int64, Int64, Float64, Int64, Int64}, pts, i, sig)
+function get_locvals_lowerlevels(pyr::Array{Any, 1}, numlevel::Int64, locmaxinfo::Tuple{Int64, Int64, Float64, Int64, Float64}, ord)
 
     # Takes in a local max for a specfic level and finds the corresponding values for this local max at levels below it. Then it returns the values for the levels below it, along with their corresponding sigma values.
+
+    #NOTE: locmaxinfo[1] is x coordinate, locmaxinfo[2] is y coordinate, locmaxinfo[3] is pixel value, locmaxinfo[4] is level, and locmaxinfo[5] is sigma size.
 
     l = locmaxinfo[4]
     numlowerlevels = l - 1
@@ -413,48 +420,75 @@ function lagrange_interp{T}(x::Array{T, 1}, y::Array{T, 1}, u::Array{Float64, 1}
 end
 
 
-function continuous_sig(pyr::Array{Any, 1}, loc_maxs::Array{Any, 1}, pts, i, sig)
+function continuous_sig(pyr::Array{Any, 1}, loc_maxs::Array{Any, 1}, ord::Int = 1)
 
     # Uses interpolation to create a continuous function out or the scale parameter to determine the appropriate size of a blob a blob for a given local max.
 
     new_blobs_trimmed = []
     numlocmaxs = length(loc_maxs)
     levels = length(pyr)
-    plotticks = linspace(1, pyr_levels, 350)
-    plotticks = Array(plotticks)
+    sig_sq = (ord * (1/4))+(1/4) 
+    sig = sqrt(sig_sq)    # blob size for base of the pyramid
+    println("Starting to create a continuous scale parameter")
 
     for k = 1:numlocmaxs
         currentmax = loc_maxs[k]
-	upperlevels = get_locvals_upperlevels(pyr, levels, currentmax, pts, i, sig)
-	lowerlevels = get_locvals_lowerlevels(pyr, levels, currentmax, pts, i, sig)
+	upperlevels = get_locvals_upperlevels(pyr, levels, currentmax, Int(ord))
+	lowerlevels = get_locvals_lowerlevels(pyr, levels, currentmax, Int(ord))
 	levelmaxs = []
 
         for j = 1:length(lowerlevels)
 	    push!(levelmaxs, lowerlevels[j])
 	end
 
-        push!(levelmaxs, lowerlevels[j])
+        push!(levelmaxs, (currentmax[5], currentmax[3]))
 
-        for j = 1:length(upperlevels[j])
+        for j = 1:length(upperlevels)
 	    push!(levelmaxs, upperlevels[j])
 	end
 
         maxsvec = []
 	points = []
 	for j = 1:levels
-	    push!(maxsvec, levelmaxs[j][2])
-	    push!(points, j)
+	    if !isnan(levelmaxs[j][2])
+	        push!(maxsvec, levelmaxs[j][2])
+                push!(points, j)
+	    end
 	end
+	plotticks = linspace(1, length(points), 350)
+        plotticks = Array(plotticks)
         f = lagrange_interp(points, maxsvec, plotticks)
 
-        val, index = findmax(f)
+#        figure(k)
+#	plot(plotticks, f)
+#	scatter(points, maxsvec)
+#	show()
+
+	val, index = findmax(f)
 	maxpoint = plotticks[index]
-	push!(new_blobs_trimmed, (loc_maxs[k][1], loc_maxs[k][2], val, maxpoint, sig*2^(maxpoint-1)))
+	push!(new_blobs_trimmed, (loc_maxs[k][1], loc_maxs[k][2], val, maxpoint,# sig*2^(maxpoint-1)))
+	println("updated sigma ", k) 
     end
+
+    println("Finished creating a continuous scale parameter")
+
     new_blobs_trimmed
 end
 
 #---------------------------------------------------------------------------
 
-#new_trimmed_blobs = continuous_sig(pyr_1, blobs_trimmed, pts_1, i_1, sig_1)
-#print(new_trimmed_blobs)
+new_blobs_trimmed = continuous_sig(pyr_1, blobs_trimmed, 20)
+
+
+#-------------------------Plotting Blobs-----------------------------
+
+fig, ax = subplots(1)
+imshow(img)
+ax = gca()
+for i = 1:length(new_blobs_trimmed)
+    c = circle((new_blobs_trimmed[i][2], new_blobs_trimmed[i][1]), 2, edgecolor= "black", facecolor = "none")
+    c[:radius] = new_blobs_trimmed[i][5]*sqrt(2)
+    ax[:add_patch](c)
+#    println(new_blobs_trimmed[i][5]*sqrt(2))
+end
+show()
