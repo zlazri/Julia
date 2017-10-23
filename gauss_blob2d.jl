@@ -151,7 +151,7 @@ function postprocpyr(pyr::Array{Any, 1})
 end
 
 #------------------Test-------------------------------------------
-ord_1 = 40
+ord_1 = 50
 
 pyr_1 = makelappyr(img, ord_1)
 
@@ -161,7 +161,7 @@ println(length(pyr_1))
 
 levels_1 = size(pyr_1)[1]
 
-threshes_1 = [0.09, 0.04, 0.03, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
+threshes_1 = [0.085, 0.03, 0.03, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
 
 loc_maxs_1 = getlocalmaxs(pyr_1, levels_1, threshes_1)
 
@@ -466,7 +466,7 @@ function continuous_sig(pyr::Array{Any, 1}, loc_maxs::Array{Any, 1}, ord::Int = 
 
 	val, index = findmax(f)
 	maxpoint = plotticks[index]
-	push!(new_blobs_trimmed, (loc_maxs[k][1], loc_maxs[k][2], val, maxpoint,# sig*2^(maxpoint-1)))
+	push!(new_blobs_trimmed, (loc_maxs[k][1], loc_maxs[k][2], val, maxpoint, sig*2^(maxpoint-1)))
 	println("updated sigma ", k) 
     end
 
