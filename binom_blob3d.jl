@@ -1,9 +1,5 @@
 # BINOMIAL FILTER FOR 3D LAPLACIAN PYRAMID. BLOB DETECTOR
 
-# TODO:
-# (1)  CONTINUOUS BLOB PARAMETER 
-# (2)  GO BACK AND COMMENT SO IT'S EASY FOR OTHERS TO READ
-
 println("Loading libraries")
 
 using Combinatorics
@@ -152,6 +148,7 @@ function getlocalmaxs(pyr::Array{Any, 1}, levels::Int64, threshes::Array{Float64
 end
 
 function makelappyr{T}(vol::Array{T, 3}, ord::Int=1)
+    println("Creating Laplace Pyramid")
     L = Int(ceil(log2(minimum(size(vol)))) + 1)
     pyr = Any[vol]
     for l = 2:L
